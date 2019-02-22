@@ -46,12 +46,16 @@ while(my $row = $csv->getline($fhr)) {
 
     next unless ($row->[$FIELDS{MimeType}] eq $MIME_TYPE);
    
-    my $paramsFromRequest = extract_json_params(decode_json $bodyReq);
+    if (length $bodyReq > 0) {
+        my $paramsFromRequest = extract_json_params(decode_json $bodyReq);
+        push @PARAMS, @$paramsFromRequest;
+    }
     my ($headersResp, $bodyResp) = split("\r\n\r\n",$row->[$FIELDS{Response}]);
     print $bodyResp,"\n";
-    my $paramsFromResponse = extract_json_params(decode_json $bodyResp);
-
-    push @PARAMS, @$paramsFromRequest, @$paramsFromResponse; 
+    if (length $bodyResp > 0) {
+        my $paramsFromResponse = extract_json_params(decode_json($bodyResp));
+        push @PARAMS, @$paramsFromResponse;
+    }
 }
 close $fhr;
 
