@@ -30,26 +30,38 @@ my $csv = Text::CSV->new({binary => 1});
 my @PARAMS;
 
 open(my $fhr, '<', $LOGGER_2PLUS_CSV);
+
+my $firstRow = $csv->getline($fhr);
+my $i = 0;
+
+foreach my $colName (@$firstRow) {
+    die "Inappropriate columns $colName != $FIELDS{$i}" if ($FIELDS{$colName} != $i);
+    $i++;
+}
+
 while(my $row = $csv->getline($fhr)) {
+    my ($headersReq, $bodyReq) = split("\r\n\r\n",$row->[$FIELDS{Request}]);
+    my $paramsFromUrl = extract_url_params($headersReq);
+    push @PARAMS,@$paramsFromUrl;
+
     next unless ($row->[$FIELDS{MimeType}] eq $MIME_TYPE);
+   
+    my $paramsFromRequest = extract_json_params(decode_json $bodyReq);
+    my ($headersResp, $bodyResp) = split("\r\n\r\n",$row->[$FIELDS{Response}]);
+    print $bodyResp,"\n";
+    my $paramsFromResponse = extract_json_params(decode_json $bodyResp);
 
-    my ($headersReq, $bodyReq) = split("\n\n",$row->[$row->[$FIELDS{Request}]]);
-    my $paramsFromRequest = extract_json_params($bodyReq);
-    my $paramsFromUrl = extract_url_params($headersReq)
-    
-    my ($headersResp, $bodyResp) = split("\n\n",$row->[$row->[$FIELDS{Response}]]);
-    my $paramsFromResponse = extract_json_params($bodyResp);
-
-    push @PARAMS, @$paramsFromRequest, @$paramsFromUrl, @$paramsFromResponse; 
+    push @PARAMS, @$paramsFromRequest, @$paramsFromResponse; 
 }
 close $fhr;
 
-open(my $fhw, '>', $OUTPUT);
-my @uniqValues = uniq @PARAMS;
-print join("\n",@uniqValues);
-close $fwh;
+#open(my $fhw, '>', $OUTPUT);
+#my @uniqValues = uniq @PARAMS;
+#print join("\n",@uniqValues);
+print join("\n",@PARAMS);
+#close $fwh;
 
-sub extract_params {
+sub extract_json_params {
     my $data = shift;
 
     my @params;
@@ -57,25 +69,38 @@ sub extract_params {
     $walk_json = sub {
         my $json = shift;
 
-        if (ref $data eq 'HASH') {
-            foreach my $key (keys %$data) {
+        if (ref $json eq 'HASH') {
+            foreach my $key (keys %$json) {
                 push @params,$key;
-                $walk_json->($data->{$key});
+                $walk_json->($json->{$key});
             }
-        } elsif (ref $data eq 'ARRAY') {
-            foreach my $element (@$data) {
+        } elsif (ref $json eq 'ARRAY') {
+            foreach my $element (@$json) {
                 $walk_json->($element);
             }
         } else {
             push @params, $json;
         }
-    }
+    };
+    $walk_json->($data);
+
+    return \@params;
 }
 
 sub extract_url_params {
-    my $headers = shift;
+    my @headers = split("\r\n",shift);
 
+    my ($method, $url, $httpVer) = $headers[0] =~ /(.*)\s(.*)\s(.*)/;
+    my ($uri, $params) = $url =~ /(.*)\?(.*)/;
+
+    return [] if !defined $params;
     
+    my @params;
+    foreach my $p (split("&",$params)) {
+        my ($k,$v) = split('=',$p);
+        push @params,$k;
+    }
+    return \@params;
 }
 
 sub help {
