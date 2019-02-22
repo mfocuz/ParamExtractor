@@ -35,7 +35,7 @@ while(my $row = $csv->getline($fhr)) {
 
     my ($headersReq, $bodyReq) = split("\n\n",$row->[$row->[$FIELDS{Request}]]);
     my $paramsFromRequest = extract_json_params($bodyReq);
-    my $paramsFromUrl = extract_url_params()
+    my $paramsFromUrl = extract_url_params($headersReq)
     
     my ($headersResp, $bodyResp) = split("\n\n",$row->[$row->[$FIELDS{Response}]]);
     my $paramsFromResponse = extract_json_params($bodyResp);
@@ -49,24 +49,33 @@ my @uniqValues = uniq @PARAMS;
 print join("\n",@uniqValues);
 close $fwh;
 
-sub extract_params_request {
-    my $req = shift;
-    my ($headers, $body) = split("\n\n",$req);
-
-    my $json = decode_json $body;
-
-    
-}
-
-sub extract_params_response {
-    my $resp = shift;
-    my ($headers, $body) = split("\n\n",$resp);
-
-    my $json = decode_json $body;
-}
-
 sub extract_params {
     my $data = shift;
+
+    my @params;
+    my $walk_json;
+    $walk_json = sub {
+        my $json = shift;
+
+        if (ref $data eq 'HASH') {
+            foreach my $key (keys %$data) {
+                push @params,$key;
+                $walk_json->($data->{$key});
+            }
+        } elsif (ref $data eq 'ARRAY') {
+            foreach my $element (@$data) {
+                $walk_json->($element);
+            }
+        } else {
+            push @params, $json;
+        }
+    }
+}
+
+sub extract_url_params {
+    my $headers = shift;
+
+    
 }
 
 sub help {
